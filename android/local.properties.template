@@ -1,0 +1,8 @@
+# local.properties - Configure paths for your machine
+# This file should not be committed to version control
+
+# Android SDK path (required)
+# sdk.dir=C\:\\Users\\YourUsername\\AppData\\Local\\Android\\Sdk
+
+# Android NDK path (optional - will use SDK's ndk-bundle if not set)  
+# ndk.dir=C\:\\Users\\YourUsername\\AppData\\Local\\Android\\Sdk\\ndk\\28.0.13004108

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:installLocation="auto">
+
+    <!-- Quest VR Requirements -->
+    <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />
+    <uses-feature android:glEsVersion="0x00030002" android:required="true" />
+    <uses-feature android:name="android.hardware.vulkan.level" android:required="true" android:version="1" />
+    <uses-feature android:name="android.hardware.vulkan.version" android:required="true" android:version="0x00401000" />
+    
+    <!-- Quest doesn't have touchscreen or controller mandatory -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+    
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application 
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:hasCode="true"
+        android:enableOnBackInvokedCallback="false"
+        android:hardwareAccelerated="true">
+
+        <!-- Meta Quest specific metadata - THIS IS CRITICAL FOR VR MODE -->
+        <meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2|questpro|quest3|quest3s" />
+        <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
+        <!-- Hand tracking support level (V2 allows launching without controllers) -->
+        <meta-data android:name="com.oculus.handtracking.version" android:value="V2.0" />
+        <meta-data android:name="com.oculus.handtracking.frequency" android:value="HIGH" />
+        
+        <!-- Quest VR Splash Screen - SDL logo -->
+        <meta-data android:name="com.oculus.ossplash" android:value="true" />
+        <meta-data android:name="com.oculus.ossplash.colorspace" android:value="QUEST_SRGB_NONGAMMA" />
+        <meta-data android:name="com.oculus.ossplash.background" android:resource="@drawable/vr_splash" />
+        
+        <!-- SDL hints -->
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" android:value="0" />
+
+        <activity 
+            android:name="org.libsdl.app.SDLActivity"
+            android:label="@string/app_name"
+            android:alwaysRetainTaskState="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:resizeableActivity="false"
+            android:exported="true">
+            
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- Meta's VR intent category (required for Quest to launch in VR mode) -->
+                <category android:name="com.oculus.intent.category.VR" />
+                <!-- Khronos OpenXR category (for broader compatibility) -->
+                <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

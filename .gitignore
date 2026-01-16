@@ -1,0 +1,50 @@
+# Android build (in android/ subdirectory)
+*.iml
+.gradle/
+local.properties
+.idea/
+*.apk
+*.aab
+*.ap_
+*.dex
+build/
+android/app/build/
+android/app/.cxx/
+
+# NDK
+obj/
+libs/
+!android/app/libs/.gitkeep
+
+# Native build
+*.o
+*.so
+*.a
+
+# IDE
+.externalNativeBuild/
+.cxx/
+
+# Generated
+gen/
+out/
+
+# CMake desktop build
+cmake-build*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Prefab extracted headers/libs (from Khronos AAR)
+**/.prefab/
+
+# JNI libs generated
+app/jniLibs/
+
+# Keystore
+*.jks
+*.keystore
+
+# Logs
+*.log
