@@ -19,8 +19,40 @@ endif()
 # Find OpenXR (optional, but required for XR examples)
 find_package(OpenXR CONFIG)
 
+# If not found, try our local build
+if(NOT OpenXR_FOUND)
+    set(OPENXR_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../OpenXR-SDK-Source")
+    if(EXISTS "${OPENXR_SDK_DIR}/build/src/loader/Release/openxr_loader.lib")
+        message(STATUS "Using local OpenXR SDK build")
+        add_library(OpenXR::openxr_loader STATIC IMPORTED)
+        set_target_properties(OpenXR::openxr_loader PROPERTIES
+            IMPORTED_LOCATION "${OPENXR_SDK_DIR}/build/src/loader/Release/openxr_loader.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENXR_SDK_DIR}/include"
+        )
+        set(OpenXR_FOUND TRUE)
+    endif()
+endif()
+
 # Content directory (local shaders)
 set(CONTENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Content")
+
+# XR Input convenience library (experimental)
+add_library(xr_input STATIC
+    src/xr_input.c
+    src/xr_input.h
+)
+
+target_include_directories(xr_input PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../SDL/src/video/khronos
+)
+
+if(OpenXR_FOUND)
+    target_link_libraries(xr_input PUBLIC OpenXR::openxr_loader)
+else()
+    # OpenXR headers from SDL, no loader (for header-only compile check)
+    message(WARNING "OpenXR not found - xr_input will compile but not link fully")
+endif()
 
 # Spinning Cubes XR Example
 add_executable(SpinningCubes
