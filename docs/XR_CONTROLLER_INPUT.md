@@ -2,15 +2,18 @@
 
 This document outlines approaches to implementing XR controller support with SDL3 GPU + OpenXR, and compares with other major engines/frameworks.
 
+> **Note (January 2026):** This document was shared in the [SDL OpenXR PR #14837](https://github.com/libsdl-org/SDL/pull/14837) discussion. The consensus from SDL maintainers is that **rendering should land first**, with input handled via a future **SDL ActionSet API** ([Issue #4464](https://github.com/libsdl-org/SDL/issues/4464)). See [SDL ActionSet and the Future](#sdl-actionset-and-the-future) for details.
+
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [SDL + OpenXR Approach](#sdl--openxr-approach)
-3. [Comparison with Other Engines](#comparison-with-other-engines)
-4. [Implementation Details](#implementation-details)
-5. [Controller Mesh Rendering](#controller-mesh-rendering)
+2. [SDL ActionSet and the Future](#sdl-actionset-and-the-future)
+3. [SDL + OpenXR Approach](#sdl--openxr-approach)
+4. [Comparison with Other Engines](#comparison-with-other-engines)
+5. [Implementation Details](#implementation-details)
+6. [Controller Mesh Rendering](#controller-mesh-rendering)
 
 ---
 
@@ -25,6 +28,82 @@ XR input differs fundamentally from traditional gamepad input:
 | **Haptics** | Simple rumble | Localized, frequency-controlled |
 | **Count** | 1-4 controllers | 2 hands + trackers |
 | **Poses** | N/A | Grip, Aim, Palm poses |
+
+---
+
+## SDL ActionSet and the Future
+
+### The Bigger Picture: SDL_ActionSet (Issue #4464)
+
+SDL maintainers are developing a comprehensive **action-based input system** that would unify input handling across all device types—not just XR controllers. This is tracked in [Issue #4464: Develop SDL_ActionSet](https://github.com/libsdl-org/SDL/issues/4464).
+
+#### What SDL_ActionSet Aims to Solve
+
+From @flibitijibibo's proposal:
+
+> "The input problem has evolved from a *hardware* issue to a *software* issue... games do a pretty miserable job of using [input devices]."
+
+The ActionSet system would abstract:
+- **Inputs:** Keyboard, Mouse, Controller, Touch, Sensor, and combinations
+- **Outputs:** Traditional motors, linear actuators (HD Rumble), trigger rumble, light bars
+- **Display:** Device-specific glyphs for UI
+
+This is similar in concept to:
+- [Steam Input](https://partner.steamgames.com/doc/features/steam_controller)
+- [Apple's Game Controller framework](https://developer.apple.com/videos/play/wwdc2021/10081/)
+
+#### Draft Specification
+
+A working draft exists: [SDL_ActionSet Spec (GitHub Gist)](https://gist.github.com/flibitijibibo/aa8a61196621adf17f76d182720830c1)
+
+Key concepts:
+- **Action Types:** `Boolean`, `Integer`, `UnsignedInteger`, `Float` (normalized), `Relative`
+- **Vectors:** Multi-component actions (e.g., 2D thumbstick)
+- **Event-based delivery:** `SDL_ActionSetEvent`
+
+### Implications for XR Input
+
+From the [PR #14837 discussion](https://github.com/libsdl-org/SDL/pull/14837) (January 2026):
+
+**@Beyley's perspective:**
+> "Given how controllers work in OpenXR, I think it's best this is left to the applications to handle, rather than putting any of the OpenXR input code into SDL directly. You're not really intended to late latch this kind of thing... unless we have a full input action system in SDL itself ([#4464](https://github.com/libsdl-org/SDL/issues/4464)) we can use to map to OpenXR, it's probably best if OpenXR input stays firmly in the application domain for now."
+
+**@flibitijibibo's response:**
+> "Action Sets will have to come another day: #4464"
+
+**Consensus:**
+1. **Rendering first** — PR #14837 focuses on GPU + OpenXR rendering integration
+2. **Input via ActionSet** — When SDL_ActionSet lands, it could map to OpenXR's action system
+3. **App-side for now** — Until then, applications handle OpenXR input directly
+
+### Why OpenXR Input is Complex for SDL
+
+OpenXR's action system has unique characteristics:
+
+1. **Already an abstraction:** OpenXR actions ARE the cross-platform layer
+2. **Runtime-managed bindings:** Runtimes can rebind actions for accessibility
+3. **No raw button states:** OpenXR only exposes "actions", not hardware buttons
+4. **Motion prediction:** Runtimes handle latency compensation internally
+5. **Action sets can be activated/deactivated:** For menu vs gameplay contexts
+
+Simply wrapping OpenXR in another abstraction layer adds indirection without clear benefit—**unless** that layer is part of a unified input system like SDL_ActionSet.
+
+### What This Means for Developers Today
+
+**For now (pre-ActionSet):**
+- Use OpenXR actions directly in your application
+- Reference this document and the prototype in `src/xr_input.h` for patterns
+- Expect SDL_ActionSet to eventually provide a cleaner path
+
+**When SDL_ActionSet ships:**
+- XR controllers could appear as action sources alongside gamepads/keyboards
+- Bindings could be unified across input devices
+- Potential for OpenXR action mapping integration
+
+### Timeline
+
+- **SDL OpenXR Rendering (PR #14837):** Approaching merge (Q1 2026)
+- **SDL_ActionSet (#4464):** Active design discussion, milestone SDL 3.x (no firm date)
 
 ---
 
@@ -624,6 +703,12 @@ This is even more complex than controller input—a strong argument for **keepin
 
 PR #14837 focuses on **rendering** (GPU + OpenXR swapchains). Input is explicitly via direct OpenXR for now.
 
+**Update (January 2026):** The SDL team has confirmed this approach in the PR discussion:
+- Rendering lands first
+- Input abstraction will come via **SDL_ActionSet** ([#4464](https://github.com/libsdl-org/SDL/issues/4464))
+- Until then, applications handle OpenXR input directly
+- This document serves as a reference for those implementing input today
+
 This document captures the design space for future discussion.
 
 ---
@@ -788,8 +873,18 @@ Might be better as **example code that apps copy and modify** rather than an off
 
 ## References
 
+### SDL Resources
+- [SDL OpenXR PR #14837](https://github.com/libsdl-org/SDL/pull/14837) — GPU + OpenXR rendering integration
+- [SDL_ActionSet Issue #4464](https://github.com/libsdl-org/SDL/issues/4464) — Proposed unified action-based input system
+- [SDL_ActionSet Draft Spec](https://gist.github.com/flibitijibibo/aa8a61196621adf17f76d182720830c1) — Working specification document
+
+### OpenXR Resources
 - [OpenXR Specification - Input](https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#input)
 - [Khronos hello_xr](https://github.com/KhronosGroup/OpenXR-SDK-Source/tree/main/src/tests/hello_xr)
+- [OpenXR-Inventory Controller Models](https://github.com/KhronosGroup/OpenXR-Inventory)
+
+### Engine Documentation
 - [Godot XR Action Map](https://docs.godotengine.org/en/stable/tutorials/xr/xr_action_map.html)
 - [Unity XR Input](https://docs.unity3d.com/Manual/xr_input.html)
-- [OpenXR-Inventory Controller Models](https://github.com/KhronosGroup/OpenXR-Inventory)
+- [Steam Input](https://partner.steamgames.com/doc/features/steam_controller)
+- [Apple Game Controller](https://developer.apple.com/documentation/gamecontroller)

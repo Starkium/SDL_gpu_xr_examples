@@ -13,6 +13,9 @@
 #include <SDL3/SDL_openxr.h>
 #include <SDL3/SDL_vulkan.h>
 
+/* XR Input convenience layer */
+#include "../../src/xr_input.h"
+
 #include <math.h>
 
 #define XR_ERR_LOG(result, msg) \
@@ -69,6 +72,20 @@ static Mat4 Mat4_RotationX(float rad) {
     return (Mat4){{ 1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1 }};
 }
 
+/* Convert quaternion to rotation matrix (for model transforms) */
+static Mat4 Mat4_FromQuaternion(float x, float y, float z, float w) {
+    float xx = x*x, yy = y*y, zz = z*z;
+    float xy = x*y, xz = x*z, yz = y*z;
+    float wx = w*x, wy = w*y, wz = w*z;
+    
+    return (Mat4){{
+        1-2*(yy+zz), 2*(xy+wz), 2*(xz-wy), 0,
+        2*(xy-wz), 1-2*(xx+zz), 2*(yz+wx), 0,
+        2*(xz+wy), 2*(yz-wx), 1-2*(xx+yy), 0,
+        0, 0, 0, 1
+    }};
+}
+
 /* Convert XrPosef to view matrix (inverted transform) */
 static Mat4 Mat4_FromXrPose(XrPosef pose) {
     float x = pose.orientation.x, y = pose.orientation.y;
@@ -122,6 +139,7 @@ static PFN_xrLocateViews pfn_xrLocateViews = NULL;
 static PFN_xrAcquireSwapchainImage pfn_xrAcquireSwapchainImage = NULL;
 static PFN_xrWaitSwapchainImage pfn_xrWaitSwapchainImage = NULL;
 static PFN_xrReleaseSwapchainImage pfn_xrReleaseSwapchainImage = NULL;
+static PFN_xrAttachSessionActionSets pfn_xrAttachSessionActionSets = NULL;
 
 /* ========================================================================
  * Global State
@@ -157,6 +175,9 @@ static SDL_GPUBuffer *indexBuffer = NULL;
 /* Animation time */
 static float animTime = 0.0f;
 
+/* Controller input state */
+static XR_InputState *inputState = NULL;
+
 /* Cube scene configuration */
 #define NUM_CUBES 5
 static Vec3 cubePositions[NUM_CUBES] = {
@@ -168,6 +189,13 @@ static Vec3 cubePositions[NUM_CUBES] = {
 };
 static float cubeScales[NUM_CUBES] = { 1.0f, 0.6f, 0.6f, 0.5f, 0.5f };
 static float cubeSpeeds[NUM_CUBES] = { 1.0f, 1.5f, -1.2f, 2.0f, -0.8f };
+static SDL_FColor cubeColors[NUM_CUBES] = {
+    { 1.0f, 0.3f, 0.3f, 1.0f },   /* Red */
+    { 0.3f, 1.0f, 0.3f, 1.0f },   /* Green */
+    { 0.3f, 0.3f, 1.0f, 1.0f },   /* Blue */
+    { 1.0f, 1.0f, 0.3f, 1.0f },   /* Yellow */
+    { 1.0f, 0.3f, 1.0f, 1.0f },   /* Magenta */
+};
 
 /* ========================================================================
  * Shader and Pipeline Creation
@@ -383,6 +411,7 @@ static int LoadXRFunctions(void)
     XR_LOAD(xrAcquireSwapchainImage);
     XR_LOAD(xrWaitSwapchainImage);
     XR_LOAD(xrReleaseSwapchainImage);
+    XR_LOAD(xrAttachSessionActionSets);
     
 #undef XR_LOAD
     
@@ -408,6 +437,25 @@ static int InitXRSession(void)
     
     result = pfn_xrCreateReferenceSpace(xrSession, &spaceCreateInfo, &xrLocalSpace);
     XR_ERR_LOG(result, "Failed to create reference space");
+    
+    /* Initialize XR input system */
+    inputState = XR_Input_Create(xrInstance, xrSession);
+    if (!inputState) {
+        SDL_Log("Warning: Failed to create XR input system - controllers won't work");
+    } else {
+        /* Attach action sets to session */
+        XrActionSet actionSets[] = { XR_Input_GetActionSet(inputState) };
+        XrSessionActionSetsAttachInfo attachInfo = { XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO };
+        attachInfo.countActionSets = 1;
+        attachInfo.actionSets = actionSets;
+        
+        result = pfn_xrAttachSessionActionSets(xrSession, &attachInfo);
+        if (XR_FAILED(result)) {
+            SDL_Log("Warning: Failed to attach action sets (result=%d)", (int)result);
+        } else {
+            SDL_Log("XR input system initialized with action sets attached");
+        }
+    }
     
     return 0;
 }
@@ -570,6 +618,36 @@ static void RenderFrame(void)
     result = pfn_xrBeginFrame(xrSession, &beginInfo);
     if (XR_FAILED(result)) return;
     
+    /* Sync input state for this frame */
+    if (inputState) {
+        XR_Input_Sync(inputState);
+        
+        /* Handle basic interactions */
+        for (int hand = 0; hand < 2; hand++) {
+            XR_Controller *controller = XR_Input_GetController(inputState, (XR_Hand)hand);
+            if (!controller) continue;
+            
+            /* Trigger pressed - change nearest cube color */
+            if (XR_Input_GetButtonDown(controller, XR_BUTTON_TRIGGER)) {
+                SDL_Log("Hand %d trigger pressed!", hand);
+                /* Change a cube color */
+                static int colorIndex = 0;
+                cubeColors[colorIndex % NUM_CUBES] = (SDL_FColor){
+                    (float)(SDL_rand(256)) / 255.0f,
+                    (float)(SDL_rand(256)) / 255.0f,
+                    (float)(SDL_rand(256)) / 255.0f,
+                    1.0f
+                };
+                colorIndex++;
+            }
+            
+            /* Grip held - vibrate */
+            if (XR_Input_GetButton(controller, XR_BUTTON_GRIP)) {
+                XR_Input_HapticPulse(controller, 0.3f, 100.0f); /* 100ms pulse */
+            }
+        }
+    }
+    
     XrCompositionLayerProjectionView *projViews = NULL;
     XrCompositionLayerProjection layer = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
     uint32_t layerCount = 0;
@@ -664,8 +742,40 @@ static void RenderFrame(void)
                     Mat4 mv = Mat4_Multiply(model, viewMatrix);
                     Mat4 mvp = Mat4_Multiply(mv, projMatrix);
                     
+                    /* Use per-cube color */
+                    SDL_FColor cubeColor = cubeColors[cubeIdx];
+                    (void)cubeColor; /* TODO: pass to shader as uniform */
+                    
                     SDL_PushGPUVertexUniformData(cmdBuf, 0, &mvp, sizeof(mvp));
                     SDL_DrawGPUIndexedPrimitives(renderPass, 36, 1, 0, 0, 0);
+                }
+                
+                /* Draw controller cubes (small cubes at hand positions) */
+                if (inputState) {
+                    for (int hand = 0; hand < 2; hand++) {
+                        XR_Controller *controller = XR_Input_GetController(inputState, (XR_Hand)hand);
+                        if (!controller) continue;
+                        
+                        XrPosef pose;
+                        if (XR_Input_LocatePose(controller, XR_POSE_GRIP, xrLocalSpace, 
+                                               frameState.predictedDisplayTime, &pose, NULL)) {
+                            /* Build controller cube model matrix */
+                            Mat4 scale = Mat4_Scale(0.05f); /* 5cm cube for controller */
+                            
+                            /* Build rotation from quaternion */
+                            Mat4 rot = Mat4_FromQuaternion(pose.orientation.x, pose.orientation.y, 
+                                                          pose.orientation.z, pose.orientation.w);
+                            
+                            Mat4 trans = Mat4_Translation(pose.position.x, pose.position.y, pose.position.z);
+                            
+                            Mat4 model = Mat4_Multiply(Mat4_Multiply(scale, rot), trans);
+                            Mat4 mv = Mat4_Multiply(model, viewMatrix);
+                            Mat4 mvp = Mat4_Multiply(mv, projMatrix);
+                            
+                            SDL_PushGPUVertexUniformData(cmdBuf, 0, &mvp, sizeof(mvp));
+                            SDL_DrawGPUIndexedPrimitives(renderPass, 36, 1, 0, 0, 0);
+                        }
+                    }
                 }
             }
             
@@ -736,6 +846,12 @@ static void Cleanup(void)
     
     if (xrViews) SDL_free(xrViews);
     
+    /* Destroy XR input system */
+    if (inputState) {
+        XR_Input_Destroy(inputState);
+        inputState = NULL;
+    }
+
     if (xrLocalSpace && pfn_xrDestroySpace) pfn_xrDestroySpace(xrLocalSpace);
     if (xrSession && pfn_xrDestroySession) pfn_xrDestroySession(xrSession);
     

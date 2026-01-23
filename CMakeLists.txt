@@ -59,7 +59,7 @@ add_executable(SpinningCubes
     examples/SpinningCubes/main.c
 )
 
-target_link_libraries(SpinningCubes PRIVATE SDL3::SDL3)
+target_link_libraries(SpinningCubes PRIVATE SDL3::SDL3 xr_input)
 
 # Include OpenXR headers from SDL
 target_include_directories(SpinningCubes PRIVATE
