@@ -506,12 +506,27 @@ static int CreateSwapchains(void)
         swapchainCreateInfo.faceCount = 1;
         swapchainCreateInfo.arraySize = 1;
         swapchainCreateInfo.mipCount = 1;
-        
+
+        int num_formats;
+        SDL_GPUTextureFormat *formats = SDL_GetGPUXRSwapchainFormats(
+            gpuDevice,
+            xrSession,
+            &num_formats);
+        if (formats == NULL) {
+            SDL_Log("Failed to enumerate swapchain formats for %u", i);
+            SDL_free(viewConfigs);
+            return 1;
+        }
+
+        /* For simplicity's sake, just pick the first format available */
+        vrSwapchains[i].format = formats[0];
+        SDL_free(formats);
+
         result = SDL_CreateGPUXRSwapchain(
             gpuDevice,
             xrSession,
             &swapchainCreateInfo,
-            &vrSwapchains[i].format,
+            vrSwapchains[i].format,
             &vrSwapchains[i].swapchain,
             &vrSwapchains[i].images);
         
