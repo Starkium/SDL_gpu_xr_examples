@@ -11,8 +11,5 @@ set(SDL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../../SDL")
 # Add SDL as a subdirectory
 add_subdirectory(${SDL_PATH} SDL_build)
 
-# Examples path
-set(EXAMPLES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../examples")
-
 # Add our VR test app
 add_subdirectory(src)
